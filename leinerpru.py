@@ -1,8 +1,6 @@
 import numpy as np
 import Lectura
 import Extras
-import math
-import GAUSS
 import time
 import sympy as sp
 from Calculos import Calcular_P
@@ -38,7 +36,7 @@ Y_bus = Extras.Y_BUS (Matriz_A, Z_rama)
 
 # Extraemos los resultados del GS. 
 
-Resultados_GS, angulos_grados_GS, iteracion_GS, S_esp_GS = GAUSS.METODO_GS(Angulo_grados,Modulo_V,P_generada,Q_generada,P_demanda, Q_demanda,Max_Iter,Bus_i_Barras, Tipo_Barra, Y_bus, Error)
+#Resultados_GS, angulos_grados_GS, iteracion_GS, S_esp_GS = GAUSS.METODO_GS(Angulo_grados,Modulo_V,P_generada,Q_generada,P_demanda, Q_demanda,Max_Iter,Bus_i_Barras, Tipo_Barra, Y_bus, Error)
 
 # METODO DE NR
 
@@ -174,6 +172,11 @@ Jacobiana_sp = sp.Matrix(Jacobiana)
 
 # Evaluar la matriz Jacobiana con los valores asignados
 Jacobiana_evaluada = Jacobiana_sp.subs(valores)
+transposed_J = Jacobiana_evaluada.T
+
+
+#***********************************************************************************************************************************
+#***********************************************************************************************************************************
 
 cont = 0
 while cont <= Max_Iter:
@@ -189,17 +192,18 @@ while cont <= Max_Iter:
     S_vector = sp.Matrix.vstack(filtered_P_vector, filtered_Q_vector)
 
     # Calcular la inversa de la matriz Jacobiana
-    Jacobiana_inversa = Jacobiana_evaluada.inv()
+    Jacobiana_inversa = transposed_J.inv()
 
     # Calcular el vector de correcciones
     multMatrices = Jacobiana_inversa * S_vector
     X = valores_vector - multMatrices
 
-    #Hallar el error
+    # Hallar el error
     error = X - valores_vector
 
     error_T = max(abs(error))
     if error_T <= 0.0001:
+        print(valores_vector)
         break
     print(error_T)
 
@@ -212,13 +216,11 @@ while cont <= Max_Iter:
     P_activa = []
     Q_reactiva = []
 
-    Modulo_V_Nuevo =[]
     Modulo_V_Nuevo = Modulo_V.copy()
     for i, key in enumerate(Modulo_V_Nuevo):
         if key in valores:
             Modulo_V_Nuevo[i] = valores[key]
 
-    angulos_radianes_Nuevo = []
     angulos_radianes_Nuevo = angulos_radianes.copy()
     for i, key in enumerate(angulos_radianes_Nuevo):
         if key in valores:
@@ -231,63 +233,24 @@ while cont <= Max_Iter:
             continue
                 
         if Tipo_Barra[k] == "PV":
-            Result = Calcular_P(Modulo_V_Nuevo, Y_modulos_matriz, Y_angulos_matriz, angulos_radianes_Nuevo, S_esp, k,  P_esp)
+            Result = Calcular_P(Modulo_V_Nuevo, Y_modulos_matriz, Y_angulos_matriz, angulos_radianes_Nuevo, S_esp, k, P_esp)
             P_activa.append(Result)
             Q_reactiva.append(0)
 
-
         if Tipo_Barra[k] == "PQ":
-            Result = Calcular_P(Modulo_V_Nuevo, Y_modulos_matriz, Y_angulos_matriz, angulos_radianes_Nuevo, S_esp, k,  P_esp)
+            Result = Calcular_P(Modulo_V_Nuevo, Y_modulos_matriz, Y_angulos_matriz, angulos_radianes_Nuevo, S_esp, k, P_esp)
             P_activa.append(Result)
 
             Result = Calcular_Q(Modulo_V_Nuevo, Y_modulos_matriz, Y_angulos_matriz, angulos_radianes_Nuevo, S_esp, k, Q_esp)
             Q_reactiva.append(Result)
 
-    V_diff= []
-    A_diff = []
-    Variables = []
-
-    for i, dif in enumerate(difV):
-        if not dif:
-            Modulo_V_Nuevo[i] = sp.symbols(f'V{i+1}')
-            Variables.append(Modulo_V_Nuevo[i])
-        V_diff.append(Modulo_V_Nuevo[i])
-
-    for i, dif in enumerate(difA):
-        if not dif:
-            angulos_radianes_Nuevo[i] = sp.symbols(f'delta{i+1}')
-            Variables.append(angulos_radianes_Nuevo[i])
-        A_diff.append(angulos_radianes_Nuevo[i])
-
-    Variables = np.array(Variables, dtype=object)
-    V_diff = np.array(V_diff, dtype=object)
-    A_diff = np.array(A_diff, dtype=object)
-
-    #Definimos las expresiones a derivar
-    P_diff = []
-
-    for k in range(len(S_esp)):
-        if Tipo_Barra[k] == "SL":
-            continue
-        Result = Calcular_P(V_diff, Y_modulos_matriz, Y_angulos_matriz, A_diff, S_esp, k,  P_esp)
-        P_diff.append(Result)
-
-    Q_diff = []
-
-    for k in range(len(S_esp)):
-        if Tipo_Barra[k] == "SL" or Tipo_Barra[k]== "PV":
-            continue   
-        Result = Calcular_Q(V_diff, Y_modulos_matriz, Y_angulos_matriz, A_diff, S_esp , k, Q_esp)
-        Q_diff.append(Result)
-
     # Inicializar listas para almacenar las derivadas
     Jacobiana =  [[0 for _ in range(len(S_esp))] for _ in range(len(S_esp))]
-
 
     # Iterar sobre el rango de P_diff y Q_diff para calcular las derivadas
     for i in range(len(Variables)):
         for j in range(len(P_diff)):
-            derivada = sp.diff(P_diff[j],Variables[i])
+            derivada = sp.diff(P_diff[j], Variables[i])
             Jacobiana[i][j] = sp.simplify(derivada)
         for k in range(len(P_diff), len(P_diff) + len(Q_diff)):
             derivada = sp.diff(Q_diff[k - len(P_diff)], Variables[i])
@@ -298,5 +261,7 @@ while cont <= Max_Iter:
 
     # Evaluar la matriz Jacobiana con los valores asignados
     Jacobiana_evaluada = Jacobiana_sp.subs(valores)
+    transposed_J = Jacobiana_evaluada.T
+
 
 print('Final')
